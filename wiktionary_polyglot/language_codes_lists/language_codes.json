@@ -1,0 +1,14 @@
+{
+  "en": {
+    "code_column": 0,
+    "name_column": 1
+  },
+  "de": {
+    "code_column": 2,
+    "name_column": 1
+  },
+  "fr": {
+    "code_column": 1,
+    "name_column": 2
+  }
+}
