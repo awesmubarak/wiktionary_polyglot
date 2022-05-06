@@ -1,3 +1,4 @@
+from os import wait
 import requests
 from bs4 import BeautifulSoup
 import csv
@@ -48,6 +49,13 @@ class Heading:
         else:
             self.text = text
 
+    def remove_header(self, ancestry, title):
+        if len(ancestry):
+            i = self.headings[ancestry[0]]
+            i.remove_header(ancestry[1:], title)
+        else:
+            del self.headings[title]
+
 
 def expand_lang_code(lang_code: str, dict_code: str) -> str:
     """Expans a given language code to the full language nameself.
@@ -92,42 +100,66 @@ def expand_lang_code(lang_code: str, dict_code: str) -> str:
     return name.capitalize()
 
 
-def create_URL(word_lang: str, definition_lang: str, word: str) -> str:
+def create_URL(dict_lang: str, word: str) -> str:
     """Creates the URL for the word.
 
-    For example, if we want the definition of the French word "pain" in
-    English, we would use the URL: `https://en.wiktionary.org/wiki/pain#French`
+    Args:
+        dict_lang: language code of the dictionary to look up in
+        word: word being looked up
 
-    >>> create_URL("fr", "en", "pain")
-    'https://en.wiktionary.org/wiki/pain#French'
+    Returns:
+        URL of target, including https protocol specifier
 
+    >>> create_URL("en", "pain")
+    'https://en.wiktionary.org/wiki/pain'
     """
-    word_lang_name = expand_lang_code(word_lang, definition_lang)
-    target_URL = (
-        f"https://{definition_lang}.wiktionary.org/wiki/{word}#{word_lang_name}"
-    )
+    target_URL = f"https://{dict_lang}.wiktionary.org/wiki/{word}"
     return target_URL
 
 
-def normalise_heading(heading: str, language_code: str) -> str:
+def normalise_heading(heading: str, lang_code: str) -> str:
+    """Remove edit suffix from headings
+
+    >>> normalise_heading("Bread[edit]", "en")
+    'Bread'
+    >>> normalise_heading("Pain[modifier le wikicode]", "fr")
+    'Pain'
+    """
+    # TODO: avoid having to open file every time
     with open("wiktionary_polyglot/edit_names.json", "r") as f:
         code_edit_names = json.loads(f.read())
-    edit_name = code_edit_names[language_code]
+    edit_name = code_edit_names[lang_code]
     heading_no_edit_name = heading.removesuffix(edit_name)
     return heading_no_edit_name
 
 
-def parse_URL(URL: str, dictionary_code: str) -> dict:
+def remove_unnecassary_headings(tree: Heading, lang_code):
+    """Removes headings that do not contribute to the defenition of a word.
+
+    >>> tree = Heading()
+    >>> for heading in ["Contents", "Navigation menu", "Ethymology 1", "Search"]:
+    ...     tree.add_heading([], heading)
+    >>> updated_tree = remove_unnecassary_headings(tree, "en")
+    >>> updated_tree.display_headings()
+    Ethymology 1
+    """
+    # TODO: this probably isn't needed for the final version, should be treated for dev?
+    with open("wiktionary_polyglot/unnecessary_headings.json", "r") as f:
+        headings = json.loads(f.read())[lang_code]
+    for header in headings:
+        tree.remove_header([], header)
+    return tree
+
+
+def parse_URL(URL: str, lang_code: str, dict_code: str) -> dict:
     r = requests.get(URL, allow_redirects=True).content
-    soup = BeautifulSoup(r, "lxml")
+    soup = BeautifulSoup(r, "html.parser")
 
     # iterate through all relevant parts of page
     headings = soup.find_all(["h2", "h3", "h4", "h5", "p", "ul", "ol"])
 
     # add relevant parts to a json object
     ranks = {"h2": 2, "h3": 3, "h4": 4, "h5": 5, "p": 10, "ul": 10, "ol": 10}
-    rank_list = []
-
     rank_list = {}
 
     root = Heading()
@@ -145,7 +177,7 @@ def parse_URL(URL: str, dictionary_code: str) -> dict:
 
         # add to tree
         if rank < 10:
-            normal_text = normalise_heading(text, dictionary_code)
+            normal_text = normalise_heading(text, dict_code)
             root.add_heading(ancestry, title=normal_text)
         else:
             normal_text = text
@@ -154,12 +186,14 @@ def parse_URL(URL: str, dictionary_code: str) -> dict:
         rank_list = {key: val for key, val in rank_list.items() if key < rank}
         rank_list[rank] = normal_text
 
+    return root
+
+
+def get_definition(word_lang_code: str, dict_code: str, word: str):
+    URL = create_URL(dict_code, word)
+    root = parse_URL(URL, word_lang_code, dict_code)
+
+    root = remove_unnecassary_headings(root, dict_code)
     root.display_headings()
 
-
-def main():
-    pass
-
-
-if __name__ == "__main__":
-    main()
+    # language_name = expand_lang_code(word_lang_code, root = dict_code)
