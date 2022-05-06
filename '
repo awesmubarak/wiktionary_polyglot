@@ -110,14 +110,14 @@ def create_URL(word_lang: str, definition_lang: str, word: str) -> str:
 
 
 def normalise_heading(heading: str, language_code: str) -> str:
-    with open("wiktionary_polyglot/edit_names.json", "r") as f:
+    with open("edit_names.json", "r") as f:
         code_edit_names = json.loads(f.read())
     edit_name = code_edit_names[language_code]
     heading_no_edit_name = heading.removesuffix(edit_name)
     return heading_no_edit_name
 
 
-def parse_URL(URL: str, dictionary_code: str) -> dict:
+def parse_URL(URL: str) -> dict:
     r = requests.get(URL, allow_redirects=True).content
     soup = BeautifulSoup(r, "lxml")
 
@@ -145,14 +145,13 @@ def parse_URL(URL: str, dictionary_code: str) -> dict:
 
         # add to tree
         if rank < 10:
-            normal_text = normalise_heading(text, dictionary_code)
-            root.add_heading(ancestry, title=normal_text)
+            normal_heading = normalise_heading(text)
+            root.add_heading(ancestry, title=normal_heading, dictionary_code)
         else:
-            normal_text = text
-            root.add_text(ancestry, text=normal_text)
+            root.add_text(ancestry, text=text)
 
         rank_list = {key: val for key, val in rank_list.items() if key < rank}
-        rank_list[rank] = normal_text
+        rank_list[rank] = text
 
     root.display_headings()
 
